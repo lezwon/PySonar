@@ -32,7 +32,7 @@ class Model():
         (gradient_id, grad_owner, mca, new_model_error,
          nwa) = self.repo.call.getGradient(self.model_id, gradient_id)
         grad_values = \
-            self.repo.ipfs.get_pyobj(IPFSAddress().from_ethereum(mca))
+            self.repo.ipfs.retrieve(IPFSAddress().from_ethereum(mca))
         if(new_model_error != 0):
             new_weights = \
                 self.repo.ipfs.get_pyobj(IPFSAddress().from_ethereum(nwa))
@@ -61,12 +61,12 @@ class Model():
 
         candidate = copy.deepcopy(self.syft_obj)
         candidate.weights -= gradient.grad_values * alpha
-        candidate.decrypt(prikey)
+        candidate.decrypt()
 
         new_model_error = candidate.evaluate(inputs, targets)
 
         tx = self.repo.get_transaction(from_addr=addr)
-        ipfs_address = self.repo.ipfs.add_pyobj(candidate.encrypt(pubkey))
+        ipfs_address = self.repo.ipfs.store(candidate.encrypt())
         tx.evalGradient(gradient.id, new_model_error,
                         IPFSAddress().to_ethereum(ipfs_address))
 
@@ -104,26 +104,29 @@ class ModelRepository():
         self.web3 = Web3(KeepAliveRPCProvider(host=web3_host,
                                               port=str(web3_port)))
 
+        account=self.web3.eth.accounts[0]
+        self.web3.personal.unlockAccount(account, "1234", 1000)
+
         if account is not None:
-            self.account = account
+            self.account=account
         else:
             print("No account submitted... using default[2]")
-            self.account = self.web3.eth.accounts[2]
+            self.account=self.web3.eth.accounts[2]
 
         self.connect_to_contract(contract_address)
 
     def connect_to_contract(self, contract_address):
         """Connects to the Sonar contract using its address and ABI"""
 
-        f = open('../abis/ModelRepository.abi', 'r')
-        abi = json.loads(f.read())
+        f=open('../abis/ModelRepository.abi', 'r')
+        abi=json.loads(f.read())
         f.close()
 
-        self.contract = self.web3.eth.contract(abi=abi)
+        self.contract=self.web3.eth.contract(abi=abi)
 
-        self.contract_address = contract_address
+        self.contract_address=contract_address
 
-        self.call = self.contract.call({
+        self.call=self.contract.call({
             "from": self.web3.eth.accounts[2],
             "to": self.contract_address,
         })
@@ -134,15 +137,16 @@ class ModelRepository():
         """I consistently forget the conventions for executing transactions against
         compiled contracts. This function helps that to be easier for me."""
 
-        txn = {}
-        txn["from"] = from_addr
-        txn["to"] = self.contract_address
+        txn={}
+        txn["from"]=from_addr
+        txn["to"]=self.contract_address
 
         if value is not None:
-            txn["value"] = int(value)
+            txn["value"]=int(value)
 
-        transact_raw = self.contract.transact(txn)
+        transact_raw=self.contract.transact(txn)
         return transact_raw
+
 
     def submit_model(self, model):
         """This accepts a model from syft.nn, loads it into IPFS, and uploads
@@ -150,8 +154,8 @@ class ModelRepository():
 
         TODO: better way to storing IPFS addresses on the blockchain.
         See https://github.com/OpenMined/Sonar/issues/19"""
-        ipfs_address = self.ipfs.store(model.syft_obj)
-        deploy_tx = self.get_transaction(
+        ipfs_address=self.ipfs.store(model.syft_obj)
+        deploy_tx=self.get_transaction(
             model.owner,
             value=self.web3.toWei(model.bounty, 'ether'))
         deploy_tx.addModel(IPFSAddress().to_ethereum(ipfs_address),
@@ -167,7 +171,7 @@ class ModelRepository():
         Currently any python object could be uploaded (which is obviously
         dangerous)."""
 
-        ipfs_address = self.ipfs.store(grad)
+        ipfs_address=self.ipfs.store(grad)
         self.get_transaction(from_addr).addGradient(
             model_id, IPFSAddress().to_ethereum(ipfs_address))
         return self.call.getNumGradientsforModel(model_id) - 1
@@ -175,11 +179,10 @@ class ModelRepository():
     def __getitem__(self, model_id):
         if(model_id < len(self)):
 
-            (owner, bounty, initial_error, target_error, mca) = \
-                self.call.getModel(model_id)
-            syft_obj = \
-                self.ipfs.retrieve(IPFSAddress().from_ethereum(mca))
-            model = Model(owner, syft_obj, self.web3.fromWei(bounty, 'ether'),
+            (owner, bounty, initial_error, target_error,
+             mca)=self.call.getModel(model_id)
+            syft_obj=self.ipfs.retrieve(IPFSAddress().from_ethereum(mca))
+            model=Model(owner, syft_obj, self.web3.fromWei(bounty, 'ether'),
                           initial_error, target_error, model_id, self)
 
             return model
@@ -190,8 +193,7 @@ class ModelRepository():
 
 class IPFSAddress:
     def from_ethereum(self, two_bytes32_representation):
-        return bytearray.fromhex("".join(two_bytes32_representation)
-                                 .replace("0x", "")).decode().replace("0", "")
+        return "".join(two_bytes32_representation).replace("\x00", "")
 
     def to_ethereum(self, ipfs_hash):
         return [ipfs_hash[0:32], ipfs_hash[32:]]
