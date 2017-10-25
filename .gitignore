@@ -7,3 +7,5 @@ pytest_runner*
 /.cache
 node_modules/
 abis/*.abi
+setup/ethermint/chaindata
+setup/ethermint/LOCK
