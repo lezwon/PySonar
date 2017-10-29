@@ -20,11 +20,13 @@ services:
     network_mode: "host"
     volumes:
       - ".:/.ethermint"
-    entrypoint: "/.ethermint/entrypoint.sh"
+    entrypoint: "/.ethermint/entrypoint.sh ethermint"
   tendermint:
       image: tendermint/tendermint
       network_mode: "host"
       volumes:
       - /tmp:/tendermint
+      - ".:/.tendermint"
+      entrypoint: "/.tendermint/entrypoint.sh tendermint"
       depends_on:
       - ethermint
